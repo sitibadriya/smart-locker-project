@@ -1,0 +1,19 @@
+# Flutter/Dart build & dependencies
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.iml
+
+# Web output
+doc/api/
+build/web/
+
+# System files
+.DS_Store
+Thumbs.db

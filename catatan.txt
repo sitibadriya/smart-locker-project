@@ -1,0 +1,8 @@
+LAPTOP
+#web
+flutter clean
+flutter pub get
+flutter run -d chrome
+
+#mobile
+flutter run -d V2204

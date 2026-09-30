@@ -1,0 +1,198 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Menonaktifkan cache persisten web agar Firestore selalu mengambil data segar secara langsung
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: false,
+  );
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Smart Locker',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.teal,
+        useMaterial3: true,
+      ),
+      home: const SmartLockerHomePage(),
+    );
+  }
+}
+
+class SmartLockerHomePage extends StatefulWidget {
+  const SmartLockerHomePage({Key? key}) : super(key: key);
+
+  @override
+  State<SmartLockerHomePage> createState() => _SmartLockerHomePageState();
+}
+
+class _SmartLockerHomePageState extends State<SmartLockerHomePage> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _pages = [
+    const LockerActivityPage(),
+    const SantriProfilePage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_selectedIndex == 0 ? 'Riwayat Akses Loker' : 'Data Santri'),
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+      ),
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        selectedItemColor: Colors.teal,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'Aktivitas',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Santri',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class LockerActivityPage extends StatelessWidget {
+  const LockerActivityPage({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('locker-activity').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+
+        if (docs.isEmpty) {
+          return const Center(
+            child: Text('Belum ada aktivitas loker.\n(Menunggu data dari locker-activity)'),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final status = (data['status'] ?? 'denied').toString();
+            final isGranted = status == 'granted';
+
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: isGranted ? Colors.green : Colors.red,
+                  child: Icon(
+                    isGranted ? Icons.lock_open : Icons.lock,
+                    color: Colors.white,
+                  ),
+                ),
+                title: Text(
+                  data['Data_FP']?.toString() ?? 'Aktivitas Akses',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text('Loker: ${data['lockerId'] ?? '-'} | FP: ${data['fingerprintId'] ?? '-'}'),
+                trailing: Text(
+                  status.toUpperCase(),
+                  style: TextStyle(
+                    color: isGranted ? Colors.green.shade800 : Colors.red.shade800,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class SantriProfilePage extends StatelessWidget {
+  const SantriProfilePage({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('santri').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+
+        if (docs.isEmpty) {
+          return const Center(
+            child: Text('Data santri tidak ditemukan.\n(Menunggu data dari koleksi santri)'),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.teal,
+                  child: Icon(Icons.person, color: Colors.white),
+                ),
+                title: Text(
+                  data['nama']?.toString() ?? 'Tanpa Nama',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text('ID Santri: ${data['idSantri'] ?? '-'} | Loker: ${data['lockerId'] ?? '-'}'),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}

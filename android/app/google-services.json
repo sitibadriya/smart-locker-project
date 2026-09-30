@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "129587147484",
+    "project_id": "latihan-iot-dht-kelompoksatu",
+    "storage_bucket": "latihan-iot-dht-kelompoksatu.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129587147484:android:2d45dc52615eeccc847a19",
+        "android_client_info": {
+          "package_name": "com.example.dht_monitoring"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQJxn-2nwzdBrJOkXnNcv9aU-ubMaWgW8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
