@@ -1,8 +1,22 @@
-LAPTOP
-#web
+# 🚀 Panduan Menjalankan Project Smart Locker
+
+🌐 Web Mode (Local Server)
+1. Buka terminal di folder `project_smart_locker`
+2. Jalankan perintah:
+   ```powershell
+   flutter run -d web-server
+Buka browser Chrome, lalu akses URL lokal yang muncul (contoh: http://localhost:53149)
+
+📱 Mobile Mode (vivo Y16 / V2204)
+Sambungkan HP ke laptop (pastikan USB Debugging aktif)
+
+Jalankan perintah pembersihan dan build di terminal:
+
+PowerShell
 flutter clean
 flutter pub get
-flutter run -d chrome
+flutter build apk --debug
+Install ke HP menggunakan ADB:
 
-#mobile
-flutter run -d V2204
+PowerShell
+C:\AndroidSDK\platform-tools\adb.exe install -r build\app\outputs\flutter-apk\app-debug.apk

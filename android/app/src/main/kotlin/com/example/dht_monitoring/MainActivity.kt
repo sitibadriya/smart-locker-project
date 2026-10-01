@@ -1,4 +1,4 @@
-package com.example.dht_monitoring
+package com.example.smart_locker
 
 import io.flutter.embedding.android.FlutterActivity
 

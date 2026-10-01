@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "129587147484",
-    "project_id": "latihan-iot-dht-kelompoksatu",
-    "storage_bucket": "latihan-iot-dht-kelompoksatu.firebasestorage.app"
+    "project_number": "651310592592",
+    "project_id": "smart-locker-iot-10a0e",
+    "storage_bucket": "smart-locker-iot-10a0e.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:129587147484:android:2d45dc52615eeccc847a19",
+        "mobilesdk_app_id": "1:651310592592:android:7f61911df90b8cfa251755",
         "android_client_info": {
-          "package_name": "com.example.dht_monitoring"
+          "package_name": "com.example.smart_locker"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCQJxn-2nwzdBrJOkXnNcv9aU-ubMaWgW8"
+          "current_key": "AIzaSyAEGD1GUNEfpt7ayKWuqJFXpcq-MZL0Kdo"
         }
       ],
       "services": {
