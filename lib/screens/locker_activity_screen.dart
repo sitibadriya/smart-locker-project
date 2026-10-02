@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../models/locker_activity.dart';
 import '../repositories/locker_repository.dart';
 import '../widgets/locker_activity_card.dart';
@@ -23,21 +23,28 @@ class LockerActivityScreen extends StatelessWidget {
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
         }
 
         final activities = snapshot.data ?? [];
 
         if (activities.isEmpty) {
           return const Center(
-            child: Text('Belum ada aktivitas loker.\n(Menunggu data dari locker-activity)'),
+            child: Text(
+              'Belum ada aktivitas loker.\n'
+              '(Menunggu data dari aktivitas-locker)',
+            ),
           );
         }
 
         return ListView.builder(
           itemCount: activities.length,
           itemBuilder: (context, index) {
-            return LockerActivityCard(activity: activities[index]);
+            return LockerActivityCard(
+              activity: activities[index],
+            );
           },
         );
       },

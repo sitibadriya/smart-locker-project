@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+
 import '../models/locker_activity.dart';
 
 class LockerActivityCard extends StatelessWidget {
   final LockerActivity activity;
 
-  const LockerActivityCard({Key? key, required this.activity}) : super(key: key);
+  const LockerActivityCard({Key? key, required this.activity})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -19,16 +21,26 @@ class LockerActivityCard extends StatelessWidget {
           ),
         ),
         title: Text(
-          activity.dataFP,
+          activity.namaSantri,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(
-          'Loker: ${activity.lockerId} | FP: ${activity.fingerprintId}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Loker: ${activity.idLocker}'),
+            Text('ID Santri: ${activity.idSantri}'),
+            Text('Sidik Jari: ${activity.idSidikJari}'),
+            Text('Keterangan: ${activity.dataSidikJari}'),
+            Text('Kecocokan: ${activity.tingkatKecocokan}'),
+            Text('Waktu: ${activity.waktuAkses}'),
+          ],
         ),
         trailing: Text(
           activity.status.toUpperCase(),
           style: TextStyle(
-            color: activity.isGranted ? Colors.green.shade800 : Colors.red.shade800,
+            color: activity.isGranted
+                ? Colors.green.shade800
+                : Colors.red.shade800,
             fontWeight: FontWeight.bold,
           ),
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/santri.dart';
 
 class SantriCard extends StatelessWidget {
@@ -19,8 +20,14 @@ class SantriCard extends StatelessWidget {
           santri.nama,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(
-          'ID Santri: ${santri.idSantri} | Loker: ${santri.lockerId}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('ID Santri: ${santri.idSantri}'),
+            Text('Loker: ${santri.lockerId}'),
+            Text('Sidik Jari: ${santri.fingerprintIds.join(', ')}'),
+            Text('Status: ${santri.statusAktif ? 'Aktif' : 'Tidak Aktif'}'),
+          ],
         ),
       ),
     );
