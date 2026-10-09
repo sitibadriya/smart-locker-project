@@ -37,7 +37,13 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
 
             const SizedBox(height: 24),
 
+            _buildInfo('ID Fingerprint', fingerprint.idFingerprint),
+
             _buildInfo('ID Sensor', fingerprint.idSensor.toString()),
+
+            _buildInfo('Jari', fingerprint.jari),
+
+            _buildInfo('Urutan', fingerprint.urutanJari.toString()),
 
             _buildInfo('Perangkat', fingerprint.idPerangkat),
 
@@ -52,9 +58,6 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
 
             const SizedBox(height: 8),
 
-            // ======================================
-            // DROPDOWN SANTRI
-            // ======================================
             StreamBuilder<List<Santri>>(
               stream: _repository.watchSantriAktif(),
               builder: (context, snapshot) {
@@ -75,14 +78,8 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
                   return const Text('Belum ada data santri aktif.');
                 }
 
-                final idMasihAda = daftarSantri.any(
-                  (santri) => santri.idSantri == selectedIdSantri,
-                );
-
-                final nilaiDropdown = idMasihAda ? selectedIdSantri : null;
-
                 return DropdownButtonFormField<String>(
-                  value: nilaiDropdown,
+                  value: selectedIdSantri,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     hintText: 'Pilih santri',
@@ -109,46 +106,49 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
 
             const SizedBox(height: 24),
 
-            // ======================================
-            // DATA SANTRI + FINGERPRINT
-            // ======================================
             if (selectedIdSantri != null)
-              StreamBuilder<List<Santri>>(
-                stream: _repository.watchSantriAktif(),
+              FutureBuilder<Santri?>(
+                future: _ambilSantriTerpilih(selectedIdSantri!),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const SizedBox.shrink();
                   }
 
-                  final daftarSantri = snapshot.data!;
-
-                  Santri? santriTerpilih;
-
-                  for (final santri in daftarSantri) {
-                    if (santri.idSantri == selectedIdSantri) {
-                      santriTerpilih = santri;
-                      break;
-                    }
-                  }
-
-                  if (santriTerpilih == null) {
-                    return const SizedBox.shrink();
-                  }
+                  final santri = snapshot.data!;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // DATA SANTRI
-                      _buildInfo('ID Santri', santriTerpilih.idSantri),
+                      _buildInfo('ID Santri', santri.idSantri),
 
-                      _buildInfo('Nama', santriTerpilih.nama),
+                      _buildInfo('Nama', santri.nama),
 
-                      _buildInfo('Locker Santri', santriTerpilih.lockerId),
+                      _buildInfo('Locker Santri', santri.lockerId),
 
                       const SizedBox(height: 16),
 
-                      // FINGERPRINT
-                      _buildFingerprintSection(santriTerpilih.idSantri),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.blue.withOpacity(0.08),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Fingerprint ini akan '
+                                'dihubungkan dengan santri '
+                                'yang dipilih.',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -156,9 +156,6 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
 
             const SizedBox(height: 32),
 
-            // ======================================
-            // TOMBOL SIMPAN
-            // ======================================
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -185,146 +182,19 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
   }
 
   // ==========================================
-  // BAGIAN FINGERPRINT
+  // AMBIL DATA SANTRI TERPILIH
   // ==========================================
 
-  Widget _buildFingerprintSection(String idSantri) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _repository.watchFingerprintSantri(idSantri),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+  Future<Santri?> _ambilSantriTerpilih(String idSantri) async {
+    final daftarSantri = await _repository.watchSantriAktif().first;
 
-        if (snapshot.hasError) {
-          return Text(
-            'Gagal mengambil data fingerprint:\n'
-            '${snapshot.error}',
-          );
-        }
-
-        final fingerprintList = snapshot.data ?? [];
-
-        final jumlah = fingerprintList.length;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Fingerprint',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              '$jumlah dari 5 fingerprint '
-              'terdaftar',
-              style: const TextStyle(fontSize: 16),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ==================================
-            // 5 SLOT FINGERPRINT
-            // ==================================
-            for (int i = 0; i < 5; i++)
-              _buildFingerprintSlot(
-                nomorSlot: i + 1,
-                fingerprintList: fingerprintList,
-              ),
-
-            // ==================================
-            // PESAN JIKA SUDAH 5
-            // ==================================
-            if (jumlah >= 5)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.orange.withOpacity(0.15),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_amber),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Maksimal 5 fingerprint '
-                        'sudah tercapai.',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ==========================================
-  // SATU SLOT FINGERPRINT
-  // ==========================================
-
-  Widget _buildFingerprintSlot({
-    required int nomorSlot,
-    required List<Map<String, dynamic>> fingerprintList,
-  }) {
-    Map<String, dynamic>? fingerprint;
-
-    if (nomorSlot <= fingerprintList.length) {
-      fingerprint = fingerprintList[nomorSlot - 1];
+    for (final santri in daftarSantri) {
+      if (santri.idSantri == idSantri) {
+        return santri;
+      }
     }
 
-    final sudahTerdaftar = fingerprint != null;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: sudahTerdaftar ? Colors.green : Colors.grey.shade300,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            sudahTerdaftar ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: sudahTerdaftar ? Colors.green : Colors.grey,
-          ),
-
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: sudahTerdaftar
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        fingerprint!['idFingerprint'] ?? 'Fingerprint',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'ID Sensor: '
-                        '${fingerprint['idSensor']}',
-                      ),
-                    ],
-                  )
-                : Text(
-                    'Slot $nomorSlot — '
-                    'Belum digunakan',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-          ),
-        ],
-      ),
-    );
+    return null;
   }
 
   // ==========================================
@@ -343,33 +213,28 @@ class _FingerprintLabelScreenState extends State<FingerprintLabelScreen> {
     });
 
     try {
-      final daftarSantri = await _repository.watchSantriAktif().first;
+      final santri = await _ambilSantriTerpilih(selectedIdSantri!);
 
-      Santri? santriTerpilih;
-
-      for (final santri in daftarSantri) {
-        if (santri.idSantri == selectedIdSantri) {
-          santriTerpilih = santri;
-          break;
-        }
-      }
-
-      if (santriTerpilih == null) {
+      if (santri == null) {
         throw Exception('Data santri tidak ditemukan.');
       }
 
       await _repository.simpanMapping(
         pendingDocumentId: fingerprint.documentId,
         idSensor: fingerprint.idSensor,
-        idSantri: santriTerpilih.idSantri,
-        namaSantri: santriTerpilih.nama,
-        idLocker: santriTerpilih.lockerId,
+        idFingerprint: fingerprint.idFingerprint,
+        idSantri: santri.idSantri,
+        namaSantri: santri.nama,
+        idLocker: santri.lockerId,
+        idPerangkat: fingerprint.idPerangkat,
+        jari: fingerprint.jari,
+        urutanJari: fingerprint.urutanJari,
       );
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fingerprint berhasil dilabeli.')),
+        const SnackBar(content: Text('Fingerprint berhasil dimapping.')),
       );
 
       Navigator.pop(context);
