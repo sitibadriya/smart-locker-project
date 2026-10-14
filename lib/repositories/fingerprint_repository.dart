@@ -22,6 +22,105 @@ class FingerprintRepository {
   }
 
   // ==========================================
+  // STATISTIK AKTIVITAS LOCKER
+  // ==========================================
+
+  // Mengambil aktivitas terbaru dari Firestore.
+  Future<List<Map<String, dynamic>>> _ambilAktivitasTerakhir(int jumlah) async {
+    final snapshot = await _firestore
+        .collection('locker-activity')
+        .orderBy('waktu', descending: true)
+        .limit(jumlah)
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data()).toList();
+  }
+
+  // Mengambil aktivitas pada tanggal tertentu.
+  Future<List<Map<String, dynamic>>> _ambilAktivitasTanggal(
+    DateTime tanggal,
+  ) async {
+    final awalHari = DateTime(tanggal.year, tanggal.month, tanggal.day);
+
+    final awalBesok = awalHari.add(const Duration(days: 1));
+
+    final snapshot = await _firestore
+        .collection('locker-activity')
+        .where('waktu', isGreaterThanOrEqualTo: Timestamp.fromDate(awalHari))
+        .where('waktu', isLessThan: Timestamp.fromDate(awalBesok))
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data()).toList();
+  }
+
+  // POIN 1:
+  // Rata-rata jeda waktu antar aktivitas terbaru,
+  // maksimal 10 aktivitas. Hasil dalam menit.
+  Future<double?> hitungRataRataJeda10Aktivitas() async {
+    final aktivitas = await _ambilAktivitasTerakhir(10);
+
+    final waktu = aktivitas
+        .map((item) => item['waktu'])
+        .whereType<Timestamp>()
+        .map((timestamp) => timestamp.toDate())
+        .toList();
+
+    if (waktu.length < 2) {
+      return null;
+    }
+
+    double totalMenit = 0;
+
+    for (int i = 0; i < waktu.length - 1; i++) {
+      final selisihDetik = waktu[i].difference(waktu[i + 1]).inSeconds.abs();
+
+      totalMenit += selisihDetik / 60.0;
+    }
+
+    return totalMenit / (waktu.length - 1);
+  }
+
+  // POIN 2:
+  // Jumlah aktivitas pada tanggal tertentu.
+  Future<int> hitungJumlahAktivitasTanggal(DateTime tanggal) async {
+    final aktivitas = await _ambilAktivitasTanggal(tanggal);
+
+    return aktivitas.length;
+  }
+
+  // POIN 3:
+  // Persentase akses berhasil pada tanggal tertentu.
+  Future<double?> hitungPersentaseBerhasil(DateTime tanggal) async {
+    final aktivitas = await _ambilAktivitasTanggal(tanggal);
+
+    if (aktivitas.isEmpty) {
+      return null;
+    }
+
+    final jumlahBerhasil = aktivitas.where((item) {
+      return item['hasilAkses'] == 'DIIZINKAN';
+    }).length;
+
+    return (jumlahBerhasil / aktivitas.length) * 100;
+  }
+
+  // POIN 4:
+  // Persentase akses gagal pada tanggal tertentu.
+  Future<double?> hitungPersentaseGagal(DateTime tanggal) async {
+    final aktivitas = await _ambilAktivitasTanggal(tanggal);
+
+    if (aktivitas.isEmpty) {
+      return null;
+    }
+
+    final jumlahGagal = aktivitas.where((item) {
+      return item['hasilAkses'] == 'DITOLAK';
+    }).length;
+
+    return (jumlahGagal / aktivitas.length) * 100;
+  }
+
+  // ==========================================
   // FINGERPRINT MILIK SANTRI
   // ==========================================
 
@@ -58,12 +157,12 @@ class FingerprintRepository {
 
   Future<bool> bisaDaftarFingerprint(String idSantri) async {
     final jumlah = await hitungFingerprintSantri(idSantri);
+
     return jumlah < 5;
   }
 
   // ==========================================
   // NONAKTIFKAN MAPPING LAMA
-  // Hanya dipanggil jika memang diperlukan.
   // Tidak dijalankan otomatis saat enrollment.
   // ==========================================
 
@@ -74,7 +173,9 @@ class FingerprintRepository {
         .where('statusAktif', isEqualTo: true)
         .get();
 
-    if (snapshot.docs.isEmpty) return;
+    if (snapshot.docs.isEmpty) {
+      return;
+    }
 
     final batch = _firestore.batch();
 
@@ -98,25 +199,24 @@ class FingerprintRepository {
     required String idLocker,
     required String idPerangkat,
   }) async {
-    // Periksa jumlah fingerprint aktif sebelum memulai.
     final jumlah = await hitungFingerprintSantri(idSantri);
 
     if (jumlah >= 5) {
       throw Exception('Santri sudah memiliki 5 fingerprint aktif.');
     }
 
-    // Pastikan santri belum memiliki fingerprint aktif
-    // yang melebihi batas akibat proses bersamaan.
     final batchId =
         'B${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
 
-    // Siapkan konfigurasi locker untuk sesi enrollment.
+    // Siapkan konfigurasi locker untuk enrollment.
     await _firestore.collection('locker-config').doc(idLocker).set({
       'activeBatchId': batchId,
       'activeSantriId': idSantri,
+      'idLocker': idLocker,
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    // Kirim perintah ke ESP32.
+    // Kirim perintah enrollment ke ESP32.
     final commandRef = _firestore
         .collection('enrollment-commands')
         .doc(idPerangkat);
@@ -151,7 +251,6 @@ class FingerprintRepository {
     required String jari,
     required int urutanJari,
   }) async {
-    // Validasi ID dan urutan jari.
     if (idSensor <= 0) {
       throw Exception('ID sensor tidak valid.');
     }
@@ -174,7 +273,7 @@ class FingerprintRepository {
       throw Exception('Label fingerprint tidak sesuai dengan urutan jari.');
     }
 
-    // Ambil konfigurasi locker untuk memperoleh batch aktif.
+    // Ambil batch enrollment aktif.
     final configSnapshot = await _firestore
         .collection('locker-config')
         .doc(idLocker)
@@ -196,15 +295,15 @@ class FingerprintRepository {
       throw Exception('Santri tidak sesuai dengan sesi enrollment locker.');
     }
 
-    // Format ID dokumen harus sama dengan yang dibaca ESP32.
+    // Format dokumen mapping yang dibaca ESP32.
     final documentId = '${idLocker}_${batchId}_${idFingerprint}';
 
     final mappingRef = _firestore
         .collection('fingerprint-mapping')
         .doc(documentId);
 
-    // Cegah satu ID sensor dipetakan ke dua label
-    // dalam batch yang sama.
+    // Cegah ID sensor yang sama digunakan pada mapping
+    // lain dalam locker dan batch yang sama.
     final existingMappings = await _firestore
         .collection('fingerprint-mapping')
         .where('idLocker', isEqualTo: idLocker)
@@ -221,7 +320,7 @@ class FingerprintRepository {
       }
     }
 
-    // Simpan mapping secara langsung ke Firestore.
+    // Simpan mapping fingerprint.
     await mappingRef.set({
       'batchId': batchId,
       'idFingerprint': idFingerprint,
