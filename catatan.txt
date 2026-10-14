@@ -1,0 +1,50 @@
+# 🚀 Panduan Menjalankan Project Smart Locker
+
+🌐 Web Mode (Local Server)
+1. Buka terminal di folder `project_smart_locker`
+2. Jalankan perintah:
+   ```powershell
+   flutter run -d web-server
+Buka browser Chrome, lalu akses URL lokal yang muncul (contoh: http://localhost:53149)
+
+📱 Mobile Mode (vivo Y16 / V2204)
+Sambungkan HP ke laptop (pastikan USB Debugging aktif)
+
+Jalankan perintah pembersihan dan build di terminal:
+
+PowerShell
+flutter clean
+flutter pub get
+flutter build apk --debug
+Install ke HP menggunakan ADB:
+
+PowerShell
+C:\AndroidSDK\platform-tools\adb.exe install -r build\app\outputs\flutter-apk\app-debug.apk
+
+Kemungkinan soal        	               Bagian kode yang perlu dipahami
+Menambahkan tombol baru	                  ElevatedButton, IconButton, onPressed
+Menambahkan menu atau halaman	            Navigator.push(), MaterialPageRoute
+Menambahkan kartu statistik	            Widget, Container, Row, Column
+Menambahkan kolom pencarian santri	      TextField, TextEditingController, where()
+Menambahkan data santri	                  Model Santri, form input, repository
+Menampilkan data Firebase secara realtime	StreamBuilder, snapshot, repository
+Mengubah tampilan aplikasi	               build(), setState(), widget Flutter
+
+Ringkasan nama file dan tanggung jawabnya
+File	                              Fungsi utama
+main.dart	                        Memulai aplikasi dan memilih tampilan web/mobile
+firebase_options.dart	            Menyediakan konfigurasi Firebase berdasarkan platform
+home_screen.dart	                  Navigasi utama web
+mobile_home_screen.dart	            Navigasi utama mobile
+dashboard_screen.dart	            Dashboard web
+mobile_dashboard_screen.dart	      Dashboard mobile
+locker_screen.dart	               Daftar dan detail locker
+santri_screen.dart	               Daftar santri dan pintu masuk pendaftaran fingerprint
+fingerprint_enrollment_screen.dart	Mengirim perintah pendaftaran fingerprint
+fingerprint_screen.dart	            Menampilkan data pemetaan fingerprint
+fingerprint_label_screen.dart	      Menampilkan informasi pengelolaan fingerprint
+system_status_screen.dart	         Menampilkan informasi status sistem yang saat ini masih statis
+riwayat_screen.dart	               Menampilkan riwayat akses locker
+santri.dart	                        Model untuk merepresentasikan data santri
+enrollment_command.dart	            Model dan format data perintah pendaftaran
+fingerprint_repository.dart	      Penghubung operasi data aplikasi dengan Firestore

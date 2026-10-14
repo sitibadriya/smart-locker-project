@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "651310592592",
+    "project_id": "smart-locker-iot-10a0e",
+    "storage_bucket": "smart-locker-iot-10a0e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:651310592592:android:7f61911df90b8cfa251755",
+        "android_client_info": {
+          "package_name": "com.example.smart_locker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEGD1GUNEfpt7ayKWuqJFXpcq-MZL0Kdo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
