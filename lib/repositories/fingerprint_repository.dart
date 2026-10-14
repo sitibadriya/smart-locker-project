@@ -252,4 +252,24 @@ class FingerprintRepository {
           }).toList();
         });
   }
+  
+  // Statistik aktivitas locker
+  Future<List<Map<String, dynamic>>> ambilAktivitasHariIni() async {
+    final sekarang = DateTime.now();
+    final awalHari = DateTime(sekarang.year, sekarang.month, sekarang.day);
+    final besok = awalHari.add(const Duration(days: 1));
+
+    final snapshot = await _firestore
+        .collection('locker-activity')
+        .where(
+          'waktu',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(awalHari),
+        )
+        .where('waktu', isLessThan: Timestamp.fromDate(besok))
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data()).toList();
+  }
+
 }
+

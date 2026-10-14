@@ -21,6 +21,7 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repository = FingerprintRepository();
+    final aktivitasFuture = repository.ambilAktivitasHariIni();
 
     return Scaffold(
       backgroundColor: background,
@@ -55,6 +56,78 @@ class DashboardScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 14),
+                            
+FutureBuilder<List<Map<String, dynamic>>>(
+  future: aktivitasFuture,
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (snapshot.hasError) {
+      return const Text('Statistik aktivitas gagal dimuat.');
+    }
+
+    final aktivitas = snapshot.data ?? [];
+    final diizinkan = aktivitas
+        .where((item) => item['hasilAkses'] == 'DIIZINKAN')
+        .length;
+    final ditolak = aktivitas
+        .where((item) => item['hasilAkses'] == 'DITOLAK')
+        .length;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildStat(
+                context,
+                icon: Icons.history_rounded,
+                title: 'Aktivitas Hari Ini',
+                value: aktivitas.length.toString(),
+                iconColor: navy,
+                cardColor: const Color(0xFFE8EEF7),
+                onTap: () {},
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStat(
+                context,
+                icon: Icons.check_circle_rounded,
+                title: 'Diizinkan',
+                value: diizinkan.toString(),
+                iconColor: green,
+                cardColor: const Color(0xFFE8F5E9),
+                onTap: () {},
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStat(
+                context,
+                icon: Icons.cancel_rounded,
+                title: 'Ditolak',
+                value: ditolak.toString(),
+                iconColor: Colors.red,
+                cardColor: const Color(0xFFFFEBEE),
+                onTap: () {},
+              ),
+            ),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  },
+),
+
                             Row(
                               children: [
                                 Expanded(
