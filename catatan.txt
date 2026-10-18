@@ -18,6 +18,8 @@ flutter pub get
 flutter build apk --debug
 Install ke HP menggunakan ADB:
 
+   flutter run -d 10DD4C052J002BL
+
 PowerShell
 C:\AndroidSDK\platform-tools\adb.exe install -r build\app\outputs\flutter-apk\app-debug.apk
 

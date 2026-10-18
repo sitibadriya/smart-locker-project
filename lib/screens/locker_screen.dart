@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class LockerScreen extends StatelessWidget {
+import 'locker_detail_screen.dart';
+import '../services/notification_service.dart';
+
+class LockerScreen extends StatefulWidget {
   const LockerScreen({super.key});
 
+  @override
+  State<LockerScreen> createState() => _LockerScreenState();
+}
+
+class _LockerScreenState extends State<LockerScreen> {
   static const Color navy = Color(0xFF0B1F3A);
   static const Color navyLight = Color(0xFF163E6D);
   static const Color background = Color(0xFFF4F7FB);
@@ -11,15 +20,191 @@ class LockerScreen extends StatelessWidget {
   static const Color green = Color(0xFF2E7D32);
 
   @override
-  Widget build(BuildContext context) {
-    final lockers = [
-      {'id': 'L01', 'device': 'esp32-locker-01', 'status': 'Aktif'},
-      {'id': 'L02', 'device': 'esp32-locker-02', 'status': 'Aktif'},
-    ];
+  void initState() {
+    super.initState();
+    _checkAndRequestPermission();
+  }
 
+  Future<void> _checkAndRequestPermission() async {
+    bool granted = await NotificationService.requestNotificationPermission();
+    if (!granted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Izin notifikasi tidak diaktifkan. Anda mungkin melewatkan peringatan keamanan loker.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // DIALOG TAMBAH / EDIT LOKER (CRUD)
+  void _showLockerFormDialog(
+    BuildContext context, {
+    String? lockerId,
+    String? currentDeviceId,
+  }) {
+    final isEdit = lockerId != null;
+    final idController = TextEditingController(text: lockerId ?? '');
+
+    final initialDevice = (currentDeviceId == null ||
+            currentDeviceId.trim().isEmpty ||
+            currentDeviceId == '-')
+        ? 'esp32-locker-01'
+        : currentDeviceId;
+
+    final deviceController = TextEditingController(text: initialDevice);
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            isEdit ? 'Edit Unit Loker $lockerId' : 'Tambah Unit Loker Baru',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: idController,
+                enabled: !isEdit,
+                decoration: InputDecoration(
+                  labelText: 'ID Locker',
+                  hintText: 'Contoh: L01',
+                  prefixIcon: const Icon(Icons.inventory_2_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: deviceController,
+                decoration: InputDecoration(
+                  labelText: 'ID Perangkat ESP32',
+                  hintText: 'Contoh: esp32-locker-01',
+                  prefixIcon: const Icon(Icons.developer_board_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final id = idController.text.trim();
+                      final deviceId = deviceController.text.trim();
+
+                      if (id.isEmpty || deviceId.isEmpty) return;
+
+                      setDialogState(() => isLoading = true);
+
+                      try {
+                        final docRef = FirebaseFirestore.instance
+                            .collection('locker-config')
+                            .doc(id);
+
+                        if (!isEdit) {
+                          await docRef.set({
+                            'activeBatchId': '',
+                            'activeSantriId': '',
+                            'enrollCommand': 'IDLE',
+                            'idPerangkat': deviceId,
+                            'lastCommandTime': FieldValue.serverTimestamp(),
+                            'lastEnrollStatus': 'IDLE',
+                            'resetCommand': 'IDLE',
+                            'targetSlot': 0,
+                          });
+                        } else {
+                          await docRef.set({
+                            'idPerangkat': deviceId,
+                            'lastCommandTime': FieldValue.serverTimestamp(),
+                          }, SetOptions(merge: true));
+                        }
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        setDialogState(() => isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal menyimpan loker: $e')),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Text(isEdit ? 'Simpan' : 'Tambah'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // KONFIRMASI HAPUS LOKER (DELETE)
+  void _confirmDeleteLocker(BuildContext context, String lockerId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Hapus Loker $lockerId?'),
+        content: const Text(
+          'Dokumen konfigurasi unit loker ini akan dihapus permanen dari sistem.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('locker-config')
+                  .doc(lockerId)
+                  .delete();
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-
       appBar: AppBar(
         title: const Text(
           'Data Locker',
@@ -29,459 +214,223 @@ class LockerScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-
-      body: ListView.builder(
-        padding: const EdgeInsets.all(20),
-        itemCount: lockers.length,
-        itemBuilder: (context, index) {
-          final locker = lockers[index];
-
-          return _LockerCard(
-            id: locker['id']!,
-            device: locker['device']!,
-            status: locker['status']!,
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ================================================================
-// CARD LOCKER
-// ================================================================
-
-class _LockerCard extends StatelessWidget {
-  final String id;
-  final String device;
-  final String status;
-
-  const _LockerCard({
-    required this.id,
-    required this.device,
-    required this.status,
-  });
-
-  static const Color navy = Color(0xFF0B1F3A);
-  static const Color navyLight = Color(0xFF163E6D);
-  static const Color textDark = Color(0xFF172033);
-  static const Color textGrey = Color(0xFF6B7280);
-  static const Color green = Color(0xFF2E7D32);
-
-  void _bukaDetail(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LockerDetailScreen(
-          idLocker: id,
-          idPerangkat: device,
-          status: status,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15),
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: InkWell(
-        onTap: () => _bukaDetail(context),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              // ==================================================
-              // ICON LOCKER
-              // ==================================================
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [navy, navyLight],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(17),
-                ),
-                child: const Icon(
-                  Icons.lock_rounded,
-                  color: Colors.white,
-                  size: 29,
-                ),
-              ),
-
-              const SizedBox(width: 15),
-
-              // ==================================================
-              // INFORMASI LOCKER
-              // ==================================================
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      id,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textDark,
-                      ),
-                    ),
-
-                    const SizedBox(height: 5),
-
-                    Text(
-                      device,
-                      style: const TextStyle(fontSize: 12, color: textGrey),
-                    ),
-
-                    const SizedBox(height: 7),
-
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: green,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-
-                        const SizedBox(width: 6),
-
-                        Text(
-                          'Perangkat $status',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: green,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // ==================================================
-              // PANAH KANAN
-              // ==================================================
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _bukaDetail(context),
-                  borderRadius: BorderRadius.circular(20),
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: navy,
-                      size: 30,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ================================================================
-// DETAIL LOCKER
-// ================================================================
-
-class LockerDetailScreen extends StatelessWidget {
-  final String idLocker;
-  final String idPerangkat;
-  final String status;
-
-  const LockerDetailScreen({
-    super.key,
-    required this.idLocker,
-    required this.idPerangkat,
-    required this.status,
-  });
-
-  static const Color navy = Color(0xFF0B1F3A);
-  static const Color navyLight = Color(0xFF163E6D);
-  static const Color background = Color(0xFFF4F7FB);
-  static const Color textDark = Color(0xFF172033);
-  static const Color textGrey = Color(0xFF6B7280);
-  static const Color green = Color(0xFF2E7D32);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: background,
-
-      appBar: AppBar(
-        title: Text(
-          'Locker $idLocker',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+      floatingActionButton: FloatingActionButton(
         backgroundColor: navy,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () => _showLockerFormDialog(context),
       ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream:
+            FirebaseFirestore.instance.collection('locker-config').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // ======================================================
-          // HEADER
-          // ======================================================
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [navy, navyLight],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  'Terjadi kesalahan:\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
               ),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
+            );
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+
+          if (docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.inventory_2_outlined, size: 70, color: textGrey),
+                  SizedBox(height: 16),
+                  Text(
+                    'Belum Ada Unit Loker',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: textDark,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.lock_rounded,
-                    color: Colors.white,
-                    size: 38,
+                  SizedBox(height: 8),
+                  Text(
+                    'Klik tombol (+) di bawah untuk menambah unit loker.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: textGrey),
                   ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              final lockerId = docs[index].id;
+
+              String deviceId = (data['idPerangkat'] ??
+                      data['deviceId'] ??
+                      data['device_id'] ??
+                      '')
+                  .toString()
+                  .trim();
+              if (deviceId.isEmpty) {
+                deviceId = '-';
+              }
+
+              final activeSantriId = (data['activeSantriId'] ?? '').toString();
+              final isTerpakai = activeSantriId.isNotEmpty;
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 15),
+                elevation: 0,
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
                 ),
-
-                const SizedBox(height: 16),
-
-                Text(
-                  idLocker,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  idPerangkat,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ======================================================
-          // STATUS PERANGKAT
-          // ======================================================
-          const Text(
-            'Status Perangkat',
-            style: TextStyle(
-              color: textDark,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 45,
-                  height: 45,
-                  decoration: BoxDecoration(
-                    color: green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.check_circle_outline, color: green),
-                ),
-
-                const SizedBox(width: 14),
-
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Row(
                     children: [
-                      Text(
-                        'Perangkat Aktif',
-                        style: TextStyle(
-                          color: textDark,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LockerDetailScreen(
+                                  idLocker: lockerId,
+                                  idPerangkat: deviceId == '-'
+                                      ? 'esp32-locker-01'
+                                      : deviceId,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 58,
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [navy, navyLight],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(17),
+                                ),
+                                child: const Icon(
+                                  Icons.lock_rounded,
+                                  color: Colors.white,
+                                  size: 29,
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      lockerId,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: textDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    // Teks perangkat dibungkus Expanded & diberi TextOverflow.ellipsis agar bebas overflow
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'Perangkat: $deviceId',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: textGrey,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 7),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: isTerpakai ? navy : green,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            isTerpakai
+                                                ? 'Terpakai ($activeSantriId)'
+                                                : 'Perangkat Aktif (Tersedia)',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isTerpakai ? navy : green,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'ESP32 terdaftar pada sistem.',
-                        style: TextStyle(color: textGrey, fontSize: 12),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: navy,
+                              size: 20,
+                            ),
+                            onPressed: () => _showLockerFormDialog(
+                              context,
+                              lockerId: lockerId,
+                              currentDeviceId: deviceId,
+                            ),
+                            tooltip: 'Edit Loker',
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                              size: 20,
+                            ),
+                            onPressed: () =>
+                                _confirmDeleteLocker(context, lockerId),
+                            tooltip: 'Hapus Loker',
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status,
-                    style: const TextStyle(
-                      color: green,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ======================================================
-          // INFORMASI LOCKER
-          // ======================================================
-          const Text(
-            'Informasi Locker',
-            style: TextStyle(
-              color: textDark,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              children: [
-                _DetailRow(
-                  icon: Icons.inventory_2_outlined,
-                  label: 'ID Locker',
-                  value: idLocker,
-                ),
-                const Divider(height: 24),
-                _DetailRow(
-                  icon: Icons.memory_outlined,
-                  label: 'ID Perangkat',
-                  value: idPerangkat,
-                ),
-                const Divider(height: 24),
-                const _DetailRow(
-                  icon: Icons.fingerprint,
-                  label: 'Sensor',
-                  value: 'JM-101B',
-                ),
-                const Divider(height: 24),
-                const _DetailRow(
-                  icon: Icons.lock_outline,
-                  label: 'Pengunci',
-                  value: 'Solenoid 12V',
-                ),
-              ],
-            ),
-          ),
-        ],
+              );
+            },
+          );
+        },
       ),
-    );
-  }
-}
-
-// ================================================================
-// DETAIL ROW
-// ================================================================
-
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  static const Color teal = Color(0xFF00897B);
-  static const Color textDark = Color(0xFF172033);
-  static const Color textGrey = Color(0xFF6B7280);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: teal.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: teal, size: 21),
-        ),
-
-        const SizedBox(width: 14),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: textGrey, fontSize: 12),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: textDark,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

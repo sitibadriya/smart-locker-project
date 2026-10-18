@@ -18,8 +18,8 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'PASTE_API_KEY_DARI_YOUR_APPS_DISINI',
-    appId: 'PASTE_APP_ID_DARI_YOUR_APPS_DISINI',
+    apiKey: 'AIzaSyDLZr4hM-aYSckpFVSYZilsJAhgQqsK0yE',
+    appId: '1:651310592592:web:d34f6f7012b9eb56251755',
     messagingSenderId: '651310592592', // Sesuai Project Number kamu
     projectId: 'smart-locker-iot-10a0e', // Project ID yang benar!
     authDomain: 'smart-locker-iot-10a0e.firebaseapp.com',
@@ -27,8 +27,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'PASTE_API_KEY_DARI_YOUR_APPS_DISINI',
-    appId: 'PASTE_APP_ID_ANDROID_DISINI',
+    apiKey: 'AIzaSyDLZr4hM-aYSckpFVSYZilsJAhgQqsK0yE',
+    appId: '1:651310592592:android:7f61911df90b8cfa251755',
     messagingSenderId: '651310592592',
     projectId: 'smart-locker-iot-10a0e',
     storageBucket: 'smart-locker-iot-10a0e.firebasestorage.app',

@@ -25,17 +25,14 @@ class FingerprintRepository {
   // FINGERPRINT MILIK SANTRI
   // ==========================================
 
+  // Di dalam FingerprintRepository
   Stream<List<Map<String, dynamic>>> watchFingerprintSantri(String idSantri) {
     return _firestore
         .collection('fingerprint-mapping')
         .where('idSantri', isEqualTo: idSantri)
-        .where('statusAktif', isEqualTo: true)
+        .where('statusAktif', isEqualTo: true) // <--- PASTIKAN FILTER INI ADA
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return {...doc.data(), 'documentId': doc.id};
-          }).toList();
-        });
+        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 
   // ==========================================

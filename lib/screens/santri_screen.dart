@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/santri.dart';
 import '../repositories/fingerprint_repository.dart';
@@ -17,6 +18,123 @@ class SantriScreen extends StatelessWidget {
   static const Color textDark = Color(0xFF172033);
   static const Color textGrey = Color(0xFF6B7280);
 
+  // Dialog untuk Tambah / Edit Santri sesuai SKPL
+  void _showSantriFormDialog(BuildContext context, {Santri? santri}) {
+    final isEdit = santri != null;
+    final idController = TextEditingController(text: santri?.idSantri ?? '');
+    final namaController = TextEditingController(text: santri?.nama ?? '');
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            isEdit ? 'Edit Data Santri' : 'Tambah Santri Baru',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: idController,
+                  enabled: !isEdit, // ID Santri terkunci saat mode edit
+                  decoration: InputDecoration(
+                    labelText: 'ID / NIS Santri',
+                    hintText: 'Contoh: ST-2026-003',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: namaController,
+                  decoration: InputDecoration(
+                    labelText: 'Nama Lengkap',
+                    hintText: 'Masukkan nama santri',
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final id = idController.text.trim();
+                      final nama = namaController.text.trim();
+
+                      if (id.isEmpty || nama.isEmpty) return;
+
+                      setDialogState(() => isLoading = true);
+
+                      try {
+                        final docRef = FirebaseFirestore.instance
+                            .collection('santri')
+                            .doc(id);
+
+                        if (!isEdit) {
+                          await docRef.set({
+                            'idSantri': id,
+                            'nama': nama,
+                            'lockerId': '',
+                            'statusAktif': true,
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                        } else {
+                          await docRef.update({
+                            'nama': nama,
+                            'updatedAt': FieldValue.serverTimestamp(),
+                          });
+                        }
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        setDialogState(() => isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal menyimpan: $e')),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Text(isEdit ? 'Simpan' : 'Tambah'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,6 +147,12 @@ class SantriScreen extends StatelessWidget {
           'Data Santri',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+      ),
+      // Tombol Tambah Santri Baru (Sesuai SKPL CRUD Santri)
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: navy,
+        child: const Icon(Icons.person_add, color: Colors.white),
+        onPressed: () => _showSantriFormDialog(context),
       ),
       body: StreamBuilder<List<Santri>>(
         stream: _repository.watchSantriAktif(),
@@ -150,8 +274,11 @@ class SantriScreen extends StatelessWidget {
 
               // LIST SANTRI
               ...santriList.map(
-                (santri) =>
-                    _SantriCard(santri: santri, repository: _repository),
+                (santri) => _SantriCard(
+                  santri: santri,
+                  repository: _repository,
+                  onEdit: () => _showSantriFormDialog(context, santri: santri),
+                ),
               ),
             ],
           );
@@ -164,8 +291,13 @@ class SantriScreen extends StatelessWidget {
 class _SantriCard extends StatelessWidget {
   final Santri santri;
   final FingerprintRepository repository;
+  final VoidCallback onEdit;
 
-  const _SantriCard({required this.santri, required this.repository});
+  const _SantriCard({
+    required this.santri,
+    required this.repository,
+    required this.onEdit,
+  });
 
   static const Color navy = Color(0xFF0B1F3A);
   static const Color teal = Color(0xFF00897B);
@@ -218,6 +350,12 @@ class _SantriCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Tombol Edit Santri
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: navy, size: 20),
+                  onPressed: onEdit,
+                  tooltip: 'Edit Santri',
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -241,38 +379,61 @@ class _SantriCard extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            // LOCKER
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F9FC),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.inventory_2_outlined, color: teal, size: 21),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Locker',
-                    style: TextStyle(color: textGrey, fontSize: 13),
+            // LOCKER (Realtime Stream dari locker-config)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('locker-config')
+                  .where('activeSantriId', isEqualTo: santri.idSantri)
+                  .snapshots(),
+              builder: (context, lockerSnap) {
+                String activeLockerName = '-';
+                if (lockerSnap.hasData && lockerSnap.data!.docs.isNotEmpty) {
+                  activeLockerName = lockerSnap.data!.docs.first.id;
+                }
+
+                return Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FC),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const Spacer(),
-                  Text(
-                    santri.lockerId,
-                    style: const TextStyle(
-                      color: textDark,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.inventory_2_outlined,
+                        color: teal,
+                        size: 21,
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Locker',
+                        style: TextStyle(color: textGrey, fontSize: 13),
+                      ),
+                      const Spacer(),
+                      Text(
+                        activeLockerName,
+                        style: TextStyle(
+                          color: activeLockerName != '-'
+                              ? textDark
+                              : Colors.orange,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
 
             const SizedBox(height: 18),
 
-            // FINGERPRINT STATUS
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: repository.watchFingerprintSantri(santri.idSantri),
+            // FINGERPRINT STATUS (Realtime Stream dengan filter statusAktif == true)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('fingerprint-mapping')
+                  .where('idSantri', isEqualTo: santri.idSantri)
+                  .where('statusAktif', isEqualTo: true)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SizedBox(
@@ -287,9 +448,9 @@ class _SantriCard extends StatelessWidget {
                   );
                 }
 
-                final fingerprints = snapshot.data ?? [];
-
-                final jumlah = fingerprints.length;
+                final jumlah = snapshot.hasData
+                    ? snapshot.data!.docs.length
+                    : 0;
                 final sudahMaksimal = jumlah >= 5;
 
                 return Column(
@@ -384,8 +545,7 @@ class _SantriCard extends StatelessWidget {
                     if (sudahMaksimal) ...[
                       const SizedBox(height: 8),
                       const Text(
-                        'Santri ini sudah memiliki '
-                        '5 fingerprint aktif.',
+                        'Santri ini sudah memiliki 5 fingerprint aktif.',
                         style: TextStyle(color: green, fontSize: 12),
                       ),
                     ],
