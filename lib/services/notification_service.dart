@@ -1,9 +1,9 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-// TOP-LEVEL / BACKGROUND HANDLER (Harus berada di luar kelas)
-// Dipanggil saat aplikasi di-kill atau berjalan di background
+// TOP-LEVEL / BACKGROUND HANDLER
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (kDebugMode) {
@@ -21,7 +21,7 @@ class NotificationService {
 
   // Inisialisasi Layanan Notifikasi
   static Future<void> initialize() async {
-    // 1. Panggil Permintaan Izin (Skenario N01) secara otomatis saat inisialisasi
+    // 1. Panggil Permintaan Izin (Skenario N01)
     await requestNotificationPermission();
 
     // 2. Register Background Handler
@@ -38,27 +38,50 @@ class NotificationService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
-        // Handle ketika notifikasi lokal diklik oleh pengguna
         if (kDebugMode) {
           print('Local notification clicked with payload: ${details.payload}');
         }
       },
     );
 
-    // 4. Buat High Importance Channel di Android (Abaikan jika berjalan di Web)
+    // 4. Buat 3 Channel Berbeda di Android (Info, Waspada, Bahaya)
     if (!kIsWeb) {
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'high_importance_channel', // id
-        'Notifikasi Darurat & Loker', // name
-        description: 'Digunakan untuk peringatan bahaya dan status loker.',
+      // Channel 1: Info (Hijau / Normal) - Untuk Santri / Aktivitas Normal
+      const AndroidNotificationChannel infoChannel = AndroidNotificationChannel(
+        'locker_info_channel',
+        'Informasi Aktivitas Loker',
+        description: 'Digunakan untuk status normal harian santri.',
+        importance: Importance.defaultImportance,
+        playSound: true,
+      );
+
+      // Channel 2: Waspada (Kuning / Medium) - Untuk Pembina Rayon
+      const AndroidNotificationChannel warningChannel =
+          AndroidNotificationChannel(
+        'locker_warning_channel',
+        'Peringatan Waspada Loker',
+        description: 'Digunakan saat percobaan akses salah berulang.',
         importance: Importance.high,
         playSound: true,
       );
 
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+      // Channel 3: Bahaya (Merah / High Alert) - Untuk Sarpras / Pembongkaran
+      const AndroidNotificationChannel dangerChannel =
+          AndroidNotificationChannel(
+        'locker_danger_channel',
+        'Darurat & Bahaya Loker',
+        description: 'Digunakan untuk indikasi pembobolan atau suhu panas.',
+        importance: Importance.max,
+        playSound: true,
+      );
+
+      final androidPlugin =
+          _localNotifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      await androidPlugin?.createNotificationChannel(infoChannel);
+      await androidPlugin?.createNotificationChannel(warningChannel);
+      await androidPlugin?.createNotificationChannel(dangerChannel);
     }
 
     // 5. Setup FCM Foreground Handler (Ketika app sedang terbuka)
@@ -66,17 +89,21 @@ class NotificationService {
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
 
+      // Ambil tipe channel dari payload data FCM, default ke 'info' jika kosong
+      String channelId = message.data['channel_id'] ?? 'locker_info_channel';
+
       if (notification != null && (android != null || kIsWeb)) {
         _showLocalNotification(
           id: notification.hashCode,
           title: notification.title ?? '',
           body: notification.body ?? '',
           payload: message.data.toString(),
+          channelId: channelId,
         );
       }
     });
 
-    // 6. Cetak FCM Token untuk Keperluan Pengujian / Console
+    // 6. Cetak FCM Token
     String? token = await _firebaseMessaging.getToken();
     if (kDebugMode) {
       print("==============================================");
@@ -86,52 +113,60 @@ class NotificationService {
     }
   }
 
-  // Permintaan Izin Notifikasi Resmi (Kondisi Skenario N01)
-  // Ini akan memicu pop-up native browser (misal: Chrome "localhost wants to send notifications")
-  // atau pop-up izin POST_NOTIFICATIONS di Android 13+.
+  // Permintaan Izin Notifikasi Resmi menggunakan Permission Handler
   static Future<bool> requestNotificationPermission() async {
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: true,
-      provisional: false,
-      sound: true,
-    );
+    // Meminta izin notifikasi secara eksplisit ke sistem Android
+    PermissionStatus status = await Permission.notification.request();
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      if (kDebugMode) print('Izin notifikasi diberikan oleh pengguna.');
+    if (status.isGranted) {
+      if (kDebugMode) print('Izin notifikasi sistem diberikan oleh pengguna.');
       return true;
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      if (kDebugMode) print('Izin sementara (provisional) diberikan.');
-      return true;
-    } else {
-      if (kDebugMode) print('Izin notifikasi ditolak oleh pengguna.');
+    } else if (status.isDenied) {
+      if (kDebugMode) print('Izin notifikasi sistem ditolak oleh pengguna.');
+      return false;
+    } else if (status.isPermanentlyDenied) {
+      // Jika ditolak secara permanen, arahkan ke pengaturan aplikasi
+      await openAppSettings();
       return false;
     }
+    return false;
   }
 
-  // Tampilkan Local Notification (Untuk Foreground App atau In-App Alert)
+  // Tampilkan Local Notification Berdasarkan Channel
   static Future<void> _showLocalNotification({
     required int id,
     required String title,
     required String body,
     String? payload,
+    required String channelId,
   }) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'high_importance_channel',
-      'Notifikasi Darurat & Loker',
-      channelDescription: 'Digunakan untuk peringatan bahaya dan status loker.',
-      importance: Importance.max,
-      priority: Priority.high,
+    // Tentukan parameter visual berdasarkan channel yang dikirim
+    Importance importance = Importance.defaultImportance;
+    Priority priority = Priority.defaultPriority;
+
+    if (channelId == 'locker_danger_channel') {
+      importance = Importance.max;
+      priority = Priority.max;
+    } else if (channelId == 'locker_warning_channel') {
+      importance = Importance.high;
+      priority = Priority.high;
+    }
+
+    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      channelId,
+      channelId == 'locker_danger_channel'
+          ? 'Darurat & Bahaya Loker'
+          : channelId == 'locker_warning_channel'
+              ? 'Peringatan Waspada Loker'
+              : 'Informasi Aktivitas Loker',
+      channelDescription: 'Notifikasi sistem keamanan loker pesantren.',
+      importance: importance,
+      priority: priority,
       playSound: true,
       icon: '@mipmap/ic_launcher',
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(
+    NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
     );
 
@@ -144,15 +179,17 @@ class NotificationService {
     );
   }
 
-  // Fungsi Helper untuk memicu Notifikasi Lokal secara manual dari App (Opsional)
+  // Fungsi Helper untuk memicu Notifikasi Lokal secara manual
   static Future<void> triggerManualNotification({
     required String title,
     required String body,
+    String channelId = 'locker_info_channel',
   }) async {
     await _showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: title,
       body: body,
+      channelId: channelId,
     );
   }
 }

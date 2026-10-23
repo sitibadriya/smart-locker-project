@@ -22,9 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-
       body: _pages[_selectedIndex],
-
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -41,15 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
           indicatorColor: const Color(0xFFE8EEF7),
-
           selectedIndex: _selectedIndex,
-
           onDestinationSelected: (index) {
             setState(() {
               _selectedIndex = index;
             });
           },
-
           labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
             if (states.contains(WidgetState.selected)) {
               return const TextStyle(
@@ -61,14 +56,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
             return const TextStyle(color: Colors.grey, fontSize: 12);
           }),
-
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.dashboard_outlined, color: Colors.grey),
               selectedIcon: Icon(Icons.dashboard_rounded, color: navy),
               label: 'Dashboard',
             ),
-
             NavigationDestination(
               icon: Icon(Icons.history_outlined, color: Colors.grey),
               selectedIcon: Icon(Icons.history_rounded, color: navy),
